@@ -1,4 +1,4 @@
-module test-rabbitmq
+module github.com/julhan07/pkgme
 
 go 1.22.2
 
