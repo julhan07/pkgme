@@ -8,6 +8,11 @@ import (
 	"github.com/streadway/amqp"
 )
 
+const (
+	reconnectDelay = 5 * time.Second
+	maxRetries     = 5
+)
+
 type RabbitMQConfig struct {
 	Host     string
 	Port     int
@@ -76,22 +81,25 @@ func (r *RabbitMQ) connect() error {
 	if err != nil {
 		return err
 	}
-	// Add a notify close channel to handle connection closures
+
+	// Handle connection closure
 	r.channel.NotifyClose(make(chan *amqp.Error))
 	return nil
 }
+
 func (r *RabbitMQ) reconnect() error {
-	for {
+	for attempts := 1; attempts <= maxRetries; attempts++ {
 		err := r.connect()
 		if err == nil {
 			return nil
 		}
-		log.Printf("Failed to reconnect to RabbitMQ: %v. Retrying in 5 seconds...", err)
-		time.Sleep(5 * time.Second)
+		log.Printf("Failed to reconnect to RabbitMQ (attempt %d/%d): %v. Retrying in %v...", attempts, maxRetries, err, reconnectDelay)
+		time.Sleep(reconnectDelay)
 	}
+	return fmt.Errorf("failed to reconnect to RabbitMQ after %d attempts", maxRetries)
 }
 
-func (r *RabbitMQ) Publish(message string) error {
+func (r *RabbitMQ) Publish(message interface{}) error {
 	if r.channel == nil {
 		return fmt.Errorf("channel is not initialized")
 	}
@@ -103,7 +111,7 @@ func (r *RabbitMQ) Publish(message string) error {
 		false,                  // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
-			Body:        []byte(message),
+			Body:        []byte(fmt.Sprintf("%v", message)),
 		})
 	if err != nil {
 		log.Printf("Failed to publish message: %v. Reconnecting and retrying...", err)
