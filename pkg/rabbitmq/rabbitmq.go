@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -104,14 +105,19 @@ func (r *RabbitMQ) Publish(message interface{}) error {
 		return fmt.Errorf("channel is not initialized")
 	}
 
-	err := r.channel.Publish(
+	jsonMsg, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	err = r.channel.Publish(
 		r.ChannelConf.Exchange, // exchange
 		r.ChannelConf.Key,      // routing key
 		false,                  // mandatory
 		false,                  // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
-			Body:        []byte(fmt.Sprintf("%v", message)),
+			Body:        jsonMsg,
 		})
 	if err != nil {
 		log.Printf("Failed to publish message: %v. Reconnecting and retrying...", err)
